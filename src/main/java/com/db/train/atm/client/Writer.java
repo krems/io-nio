@@ -1,6 +1,8 @@
 package com.db.train.atm.client;
 
 import com.db.train.atm.ATMData;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -10,6 +12,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 
 class Writer implements Runnable {
+    private static final Logger log = LoggerFactory.getLogger(Writer.class);
     private static final int BUF_SIZE = 128 * 1024;
     private final SelectionKey key;
     private final SocketChannel channel;
@@ -22,7 +25,12 @@ class Writer implements Runnable {
 
     @Override
     public void run() {
-        ATMData generate = ATMData.generate();
+        ATMData data = ATMData.generate();
+        send(data);
+        turnOnAcknowledgeHandler();
+    }
+
+    private void send(ATMData generate) {
         buf.clear();
         buf.put(serialize(generate));
         buf.flip();
@@ -30,20 +38,15 @@ class Writer implements Runnable {
             try {
                 channel.write(buf);
             } catch (IOException e) {
-                e.printStackTrace();
-                key.cancel();
-                key.selector().wakeup();
-                try {
-                    channel.close();
-                } catch (IOException e1) {
-                    e1.printStackTrace();
-                }
-                throw new RuntimeException(e);
+                handleException(e);
             }
         }
-//        key.interestOps(SelectionKey.OP_READ);
-//        key.attach(new Acknowledger(System.nanoTime(), key));
-//        key.selector().wakeup();
+    }
+
+    private void turnOnAcknowledgeHandler() {
+        key.interestOps(SelectionKey.OP_READ);
+        key.attach(new AcknowledgeHandler(System.nanoTime(), key));
+        key.selector().wakeup();
     }
 
     private byte[] serialize(ATMData generate) {
@@ -53,16 +56,20 @@ class Writer implements Runnable {
             outputStream = new ObjectOutputStream(byteOut);
             outputStream.writeObject(generate);
         } catch (IOException e) {
-            e.printStackTrace();
-            key.cancel();
-            key.selector().wakeup();
-            try {
-                channel.close();
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            }
-            throw new RuntimeException(e);
+            handleException(e);
         }
         return byteOut.toByteArray();
+    }
+
+    private void handleException(IOException e) {
+        log.error("Error occurred", e);
+        key.cancel();
+        key.selector().wakeup();
+        try {
+            channel.close();
+        } catch (IOException e1) {
+            log.error("Error closing channel", e1);
+        }
+        throw new RuntimeException(e);
     }
 }

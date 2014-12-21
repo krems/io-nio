@@ -1,6 +1,8 @@
 package com.db.train.nio;
 
 import com.db.train.CommonUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -14,6 +16,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 // 82_962ms
 public class NetWorkNIOTransferServer {
+    private static final Logger log = LoggerFactory.getLogger(NetWorkNIOTransferServer.class);
     private static final int NETWORK_BUFFER_SIZE = 128 * 1024;
     private static final ByteBuffer POISON = ByteBuffer.allocate(0);
     private static final Queue<ByteBuffer> inputQueue = new ConcurrentLinkedQueue<>();
@@ -28,53 +31,17 @@ public class NetWorkNIOTransferServer {
         prepareServerSocketChannel();
         Writer writer = prepareFileReaderChannel();
         runMainReactorLoop(writer);
+        closeSelector();
+        log.debug("Copy took {} ms", (System.nanoTime() - start) / 1e6);
     }
 
     private static void openSelector() {
         try {
             srvSelector = Selector.open();
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Error opening selector", e);
+            throw new RuntimeException(e);
         }
-    }
-
-    private static void runMainReactorLoop(Writer writer) {
-        readIsRunning = true;
-        writeIsRunning = true;
-        while (isRunning() && !Thread.currentThread().isInterrupted()) {
-            try {
-                int selected = srvSelector.select();
-                if (selected > 0) {
-                    Set<SelectionKey> keys = srvSelector.selectedKeys();
-                    keys.forEach(key -> {
-                        Runnable attachment = (Runnable) key.attachment();
-                        attachment.run();
-                    });
-                    keys.clear();
-                }
-                writer.run();
-            } catch (IOException e) {
-                e.printStackTrace();
-                readIsRunning = false;
-                writeIsRunning = false;
-                inputQueue.offer(POISON);
-                srvSelector.wakeup();
-            }
-        }
-        closeSelector();
-        System.out.println("Copy took " + ((System.nanoTime() - start) / 1e6) + "ms");
-    }
-
-    private static void closeSelector() {
-        try {
-            srvSelector.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static boolean isRunning() {
-        return readIsRunning || writeIsRunning;
     }
 
     private static void prepareServerSocketChannel() {
@@ -85,19 +52,57 @@ public class NetWorkNIOTransferServer {
             SelectionKey sk = srvSocket.register(srvSelector, SelectionKey.OP_ACCEPT);
             sk.attach(new Acceptor(sk));
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Error preparing socket channel", e);
             throw new RuntimeException(e);
         }
     }
+
     private static Writer prepareFileReaderChannel() {
         try {
             RandomAccessFile inputFile = new RandomAccessFile(CommonUtils.DEFAULT_DEST_PATH, "rw");
             FileChannel channel = inputFile.getChannel();
             return new Writer(channel);
         } catch (FileNotFoundException e) {
-            e.printStackTrace();
+            log.error("Error opening file channel", e);
             throw new RuntimeException(e);
         }
+    }
+
+    private static void runMainReactorLoop(Writer writer) {
+        readIsRunning = true;
+        writeIsRunning = true;
+        while (isRunning() && !Thread.currentThread().isInterrupted()) {
+            try {
+                srvSelector.select();
+                processSelected(writer);
+            } catch (IOException e) {
+                log.error("Error in server reactor", e);
+                readIsRunning = false;
+                writeIsRunning = false;
+            }
+        }
+    }
+
+    private static void processSelected(Writer writer) {
+        Set<SelectionKey> keys = srvSelector.selectedKeys();
+        keys.forEach(key -> {
+            Runnable attachment = (Runnable) key.attachment();
+            attachment.run();
+        });
+        keys.clear();
+        writer.run();
+    }
+
+    private static void closeSelector() {
+        try {
+            srvSelector.close();
+        } catch (IOException e) {
+            log.error("Error closing selector", e);
+        }
+    }
+
+    private static boolean isRunning() {
+        return readIsRunning || writeIsRunning;
     }
 
     private static class Acceptor implements Runnable {
@@ -112,22 +117,36 @@ public class NetWorkNIOTransferServer {
         @Override
         public void run() {
             try {
-                SocketChannel inputSocket = srvSocket.accept();
-                if (inputSocket != null) {
-                    start = System.nanoTime();
-                    inputSocket.configureBlocking(false);
-                    SelectionKey sk = inputSocket.register(srvSelector, SelectionKey.OP_READ);
-                    sk.attach(new Reader(sk));
-                    this.sk.cancel();
-                }
+                accept();
             } catch (IOException e) {
-                e.printStackTrace();
-                readIsRunning = false;
-                writeIsRunning = false;
-                inputQueue.offer(POISON);
+                log.error("Error accepting connection", e);
+                handleException();
+            } finally {
                 sk.cancel();
                 srvSelector.wakeup();
             }
+        }
+
+        private void accept() throws IOException {
+            SocketChannel inputSocket = srvSocket.accept();
+            if (inputSocket != null) {
+                if (log.isDebugEnabled()) {
+                    start = System.nanoTime();
+                }
+                prepareInputSocketChannel(inputSocket);
+            }
+        }
+
+        private void prepareInputSocketChannel(SocketChannel inputSocket) throws IOException {
+            inputSocket.configureBlocking(false);
+            SelectionKey sk = inputSocket.register(srvSelector, SelectionKey.OP_READ);
+            sk.attach(new Reader(sk));
+        }
+
+        private void handleException() {
+            readIsRunning = false;
+            writeIsRunning = false;
+            inputQueue.offer(POISON);
         }
     }
 
@@ -142,54 +161,78 @@ public class NetWorkNIOTransferServer {
 
         @Override
         public void run() {
-            ByteBuffer buf = ByteBuffer.allocate(NETWORK_BUFFER_SIZE);
+            read();
+        }
+
+        private void read() {
             try {
-                if (socket.read(buf) <= 0) {
-                    readIsRunning = false;
-                    inputQueue.offer(POISON);
-                    sk.cancel();
-                    srvSelector.wakeup();
-                    socket.close();
-                } else if (!inputQueue.offer(buf)) {
-                    System.err.println("Couldn't put read bytes");
-                }
+                ByteBuffer buf = ByteBuffer.allocate(NETWORK_BUFFER_SIZE);
+                doRead(buf);
             } catch (IOException e) {
-                e.printStackTrace();
-                readIsRunning = false;
-                inputQueue.offer(POISON);
-                sk.cancel();
-                srvSelector.wakeup();
+                log.error("Error reading message", e);
+                finishReading();
             }
+        }
+
+        private void doRead(ByteBuffer buf) throws IOException {
+            if (socket.read(buf) <= 0) {
+                handleAllRead();
+            } else if (!inputQueue.offer(buf)) {
+                log.warn("Lost message");
+            }
+        }
+
+        private void handleAllRead() throws IOException {
+            finishReading();
+            socket.close();
+        }
+
+        private void finishReading() {
+            readIsRunning = false;
+            inputQueue.offer(POISON);
+            sk.cancel();
+            srvSelector.wakeup();
         }
     }
 
     private static class Writer implements Runnable {
-        private final FileChannel in;
+        private final FileChannel out;
 
-        private Writer(FileChannel inputChannel) {
-            this.in = inputChannel;
+        private Writer(FileChannel writeChannel) {
+            this.out = writeChannel;
         }
 
         @Override
         public void run() {
             ByteBuffer buf = inputQueue.poll();
-            if (buf != null) {
-                if (buf == POISON) {
-                    writeIsRunning = false;
-                    return;
-                }
-                buf.flip();
-                try {
-                    while (buf.hasRemaining()) {
-                        in.write(buf);
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    readIsRunning = false;
-                    writeIsRunning = false;
-                    srvSelector.wakeup();
-                }
+            if (buf == POISON) {
+                writeIsRunning = false;
+            } else if (buf != null) {
+                write(buf);
             }
+        }
+
+        private void write(ByteBuffer buf) {
+            try {
+                buf.flip();
+                doWrite(buf);
+                log.trace("Buffer written");
+            } catch (IOException e) {
+                log.error("Error writing to file", e);
+                handleException();
+            }
+        }
+
+        private void doWrite(ByteBuffer buf) throws IOException {
+            while (buf.hasRemaining()) {
+                out.write(buf);
+            }
+        }
+
+        private void handleException() {
+            readIsRunning = false;
+            writeIsRunning = false;
+            srvSelector.wakeup();
         }
     }
 }

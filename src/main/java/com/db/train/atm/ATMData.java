@@ -1,14 +1,13 @@
 package com.db.train.atm;
 
 import java.io.Serializable;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class ATMData implements Serializable {
     private double longitude;
     private double latitude;
     private double bid;
     private double ask;
-    private static Random random = new Random();
     private static final double MIN_BID = 50.0;
     private static final double MAX_BID = 80.0;
     private static final double MIN_ASK = 60.0;
@@ -42,9 +41,10 @@ public class ATMData implements Serializable {
     }
 
     public static ATMData generate() {
-        double randomBid = MIN_BID + (MAX_BID - MIN_BID) * random.nextDouble();
-        double randomAsk = MIN_ASK + (MAX_ASK - MIN_ASK) * random.nextDouble();
-        return new ATMData(random.nextDouble(), random.nextDouble(), randomBid, randomAsk);
+        double randomBid = MIN_BID + (MAX_BID - MIN_BID) * ThreadLocalRandom.current().nextDouble(1);
+        double randomAsk = MIN_ASK + (MAX_ASK - MIN_ASK) * ThreadLocalRandom.current().nextDouble(1);
+        return new ATMData(ThreadLocalRandom.current().nextDouble(),
+                ThreadLocalRandom.current().nextDouble(), randomBid, randomAsk);
     }
 
     @Override
