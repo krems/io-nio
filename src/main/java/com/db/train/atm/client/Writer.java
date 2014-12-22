@@ -31,15 +31,27 @@ class Writer implements Runnable {
     }
 
     private void send(ATMData generate) {
+        putDataIntoBuffer(generate);
+        sendData();
+    }
+
+    private void putDataIntoBuffer(ATMData generate) {
         buf.clear();
         buf.put(serialize(generate));
         buf.flip();
+    }
+    
+    private void sendData() {
+        try {
+            writeDataToSocket();
+        } catch (IOException e) {
+            handleException(e);
+        }
+    }
+
+    private void writeDataToSocket() throws IOException {
         while (buf.hasRemaining()) {
-            try {
-                channel.write(buf);
-            } catch (IOException e) {
-                handleException(e);
-            }
+            channel.write(buf);
         }
     }
 

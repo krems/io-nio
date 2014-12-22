@@ -23,19 +23,19 @@ class Acceptor implements Runnable {
     public Acceptor(ExecutorService executor, SelectionKey key, Queue<ATMData> resultQueue) {
         this.key = key;
         this.channel = (ServerSocketChannel) key.channel();
-        startSelectorReactors(executor, resultQueue);
+        startReactors(executor, resultQueue);
     }
 
-    private void startSelectorReactors(ExecutorService executor, Queue<ATMData> resultQueue) {
+    private void startReactors(ExecutorService executor, Queue<ATMData> resultQueue) {
         try {
-            doStartSelectorReactors(executor, resultQueue);
+            startSelectorReactors(executor, resultQueue);
         } catch (Exception e) {
             log.error("Error opening selector", e);
             throw new RuntimeException(e);
         }
     }
 
-    private void doStartSelectorReactors(ExecutorService executor, Queue<ATMData> resultQueue) throws IOException {
+    private void startSelectorReactors(ExecutorService executor, Queue<ATMData> resultQueue) throws IOException {
         for (int i = 0; i < clientSelectorReactors.length; i++) {
             clientSelectorReactors[i] = new SelectorReactor(resultQueue, Selector.open());
             executor.submit(clientSelectorReactors[i]);

@@ -23,19 +23,19 @@ class AcknowledgeHandler implements Runnable {
 
     @Override
     public void run() {
-        catchAckMessage();
+        catchAck();
         turnOnWriter();
     }
 
-    private void catchAckMessage() {
+    private void catchAck() {
         try {
-            doCatchAckMessage();
+            readAckMessage();
         } catch (IOException e) {
             handleException(e);
         }
     }
 
-    private void doCatchAckMessage() throws IOException {
+    private void readAckMessage() throws IOException {
         if (channel.read(buf) <= 0) {
             key.cancel();
             key.selector().wakeup();

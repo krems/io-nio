@@ -43,8 +43,8 @@ public class Server {
 
     public void start() {
         startATMDataParser();
-        prepareServerSocket();
-        executor.submit(this::runAcceptorReactorLoop);
+        openServerSocket();
+        executor.submit(this::startReactor);
     }
 
     private void startATMDataParser() {
@@ -52,9 +52,9 @@ public class Server {
         dataParser.start();
     }
 
-    private void prepareServerSocket() {
+    private void openServerSocket() {
         try {
-            doPrepareServerSocket();
+            openAndRegisterServerSocket();
         } catch (Exception e) {
             log.error("Error preparing server socket channel", e);
             running = false;
@@ -62,7 +62,7 @@ public class Server {
         }
     }
 
-    private void doPrepareServerSocket() throws IOException {
+    private void openAndRegisterServerSocket() throws IOException {
         ServerSocketChannel srvSocket = ServerSocketChannel.open();
         srvSocket.socket().bind(new InetSocketAddress(port));
         srvSocket.configureBlocking(false);
@@ -71,10 +71,10 @@ public class Server {
         acceptorSelector.wakeup();
     }
 
-    private void runAcceptorReactorLoop() {
+    private void startReactor() {
         running = true;
         try {
-            doRunReactorLoop();
+            runReactorLoop();
         } catch (Exception e) {
             log.error("Error in server reactor", e);
             running = false;
@@ -84,7 +84,7 @@ public class Server {
         executor.shutdownNow();
     }
 
-    private void doRunReactorLoop() throws IOException {
+    private void runReactorLoop() throws IOException {
         while (running && !Thread.currentThread().isInterrupted()) {
             acceptorSelector.select();
             processSelected();
