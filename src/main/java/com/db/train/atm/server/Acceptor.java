@@ -1,8 +1,9 @@
 package com.db.train.atm.server;
 
 import com.db.train.atm.ATMData;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
@@ -11,6 +12,7 @@ import java.util.Queue;
 import java.util.concurrent.ExecutorService;
 
 class Acceptor implements Runnable {
+    private static final Logger log = LoggerFactory.getLogger(Acceptor.class);
     private final SelectorReactor[] clientSelectorReactors = new SelectorReactor[Server.CLIENT_SELECTORS_NUMBER];
     private boolean measure = true;
     private final SelectionKey key;
@@ -25,8 +27,8 @@ class Acceptor implements Runnable {
                 clientSelectorReactors[i] = new SelectorReactor(resultQueue, Selector.open());
                 executor.submit(clientSelectorReactors[i]);
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            log.error("Error opening selector", e);
             throw new RuntimeException(e);
         }
     }
@@ -36,6 +38,7 @@ class Acceptor implements Runnable {
         try {
             SocketChannel inputSocket = channel.accept();
             if (inputSocket != null) {
+                log.debug("Connection accepted");
                 inputSocket.configureBlocking(false);
                 int nextReactorIndex = getNextReactorIndex();
                 clientSelectorReactors[nextReactorIndex].enqueueForRegister(inputSocket);
@@ -45,8 +48,8 @@ class Acceptor implements Runnable {
                     measure = false;
                 }
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            log.error("Error accepting connection", e);
             key.selector().wakeup();
             throw new RuntimeException(e);
         }

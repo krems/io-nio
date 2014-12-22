@@ -33,18 +33,20 @@ public class Client {
 
     public void start() {
         servers.forEach(this::createConnection);
-        try {
-            runReactorLoop();
-        } catch (IOException e) {
-            log.error("Error in reactor", e);
-            throw new RuntimeException(e);
-        }
+        new Thread(() -> {
+            try {
+                runReactorLoop();
+            } catch (Exception e) {
+                log.error("Error in reactor", e);
+                throw new RuntimeException(e);
+            }
+        }).start();
     }
 
     private void createConnection(InetSocketAddress server) {
         try {
             createAndRegisterChannel(server);
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.error("Error creating connection", e);
             throw new RuntimeException(e);
         }

@@ -1,6 +1,8 @@
 package com.db.train.atm.server;
 
 import com.db.train.atm.ATMData;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -9,17 +11,10 @@ import java.nio.channels.SocketChannel;
 import java.util.Queue;
 
 class Reader implements Runnable {
+    private static final Logger log = LoggerFactory.getLogger(Reader.class);
     private static final int OBJECT_SIZE;
     static {
-        // todo: ugly
-        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
-        try {
-            ObjectOutputStream outputStream = new ObjectOutputStream(byteOut);
-            outputStream.writeObject(ATMData.generate());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        OBJECT_SIZE = byteOut.toByteArray().length;
+        OBJECT_SIZE = calculateObjectSize();
     }
     private final Queue<ATMData> resultQueue;
     private final SelectionKey key;
@@ -35,34 +30,40 @@ class Reader implements Runnable {
     @Override
     public void run() {
         try {
-            if (channel.read(buf) <= 0) {
-                key.cancel();
-                key.selector().wakeup();
-                channel.close();
-                return;
-            } else if (buf.remaining() == 0) {
-                ATMData data = deserialize(buf.array());
-                if (!resultQueue.offer(data)) {
-                    System.err.println("Couldn't publish result");
-                }
-//            new Acknowledger(key).run();
-                ThroughputCounter.ops.incrementAndGet();
-                buf.clear();
-            }
-//            ThroughputCounter.rps.incrementAndGet();
-        } catch (IOException e) {
+            receive();
+        } catch (Exception e) {
             handleException(e);
         }
     }
 
-    private void handleException(IOException e) {
-        e.printStackTrace();
+    private void receive() throws IOException {
+        if (channel.read(buf) <= 0) {
+            key.cancel();
+            key.selector().wakeup();
+            channel.close();
+        } else if (buf.remaining() == 0) {
+            processReceivedData();
+        }
+    }
+
+    private void processReceivedData() {
+        ATMData data = deserialize(buf.array());
+        if (!resultQueue.offer(data)) {
+            System.err.println("Couldn't publish result");
+        }
+        new Acknowledger(key).run();
+        ThroughputCounter.ops.incrementAndGet();
+        buf.clear();
+    }
+
+    private void handleException(Exception e) {
+        log.error("Error occurred", e);
         key.cancel();
         key.selector().wakeup();
         try {
             channel.close();
         } catch (IOException e1) {
-            e1.printStackTrace();
+            log.error("Error closing channel", e);
         }
     }
 
@@ -71,8 +72,21 @@ class Reader implements Runnable {
         try (ObjectInput in = new ObjectInputStream(bis)) {
             return (ATMData) in.readObject();
         } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
+            log.error("Error during deserialization", e);
             throw new RuntimeException(e);
         }
+    }
+
+    private static int calculateObjectSize() {
+        // todo: ugly
+        ByteArrayOutputStream byteOut = new ByteArrayOutputStream();
+        try {
+            ObjectOutputStream outputStream = new ObjectOutputStream(byteOut);
+            outputStream.writeObject(ATMData.generate());
+        } catch (Exception e) {
+            log.error("Error calculating object size", e);
+            throw new RuntimeException(e);
+        }
+        return byteOut.toByteArray().length;
     }
 }

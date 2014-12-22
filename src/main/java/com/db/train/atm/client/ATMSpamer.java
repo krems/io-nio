@@ -27,6 +27,7 @@ public class ATMSpamer {
     private static Client startClient(Set<InetSocketAddress> servers) {
         Client client = new Client(servers);
         client.start();
+        log.info("Client started");
         return client;
     }
 

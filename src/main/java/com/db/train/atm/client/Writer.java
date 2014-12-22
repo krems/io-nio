@@ -55,13 +55,13 @@ class Writer implements Runnable {
         try {
             outputStream = new ObjectOutputStream(byteOut);
             outputStream.writeObject(generate);
-        } catch (IOException e) {
+        } catch (Exception e) {
             handleException(e);
         }
         return byteOut.toByteArray();
     }
 
-    private void handleException(IOException e) {
+    private void handleException(Exception e) {
         log.error("Error occurred", e);
         key.cancel();
         key.selector().wakeup();

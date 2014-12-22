@@ -35,7 +35,7 @@ class AcknowledgeHandler implements Runnable {
                 channel.close();
             }
             log.info("Delay: {} ms", (System.nanoTime() - startTimestamp) / 1e6);
-        } catch (IOException e) {
+        } catch (Exception e) {
             handleException(e);
         }
     }
@@ -46,7 +46,7 @@ class AcknowledgeHandler implements Runnable {
         key.selector().wakeup();
     }
 
-    private void handleException(IOException e) {
+    private void handleException(Exception e) {
         log.error("Error reading ack message", e);
         key.cancel();
         key.selector().wakeup();

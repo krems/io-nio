@@ -1,11 +1,14 @@
 package com.db.train.atm.server;
 
 import com.db.train.atm.ATMData;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 
 class ATMDataParser {
+    private static final Logger log = LoggerFactory.getLogger(ATMDataParser.class);
     private final BlockingQueue<ATMData> resultQueue;
     private final ExecutorService executor;
 
@@ -16,15 +19,16 @@ class ATMDataParser {
 
     public void start() {
         executor.submit(this::parse);
+        log.info("ATMData parser started");
     }
 
     private void parse(){
         while(!Thread.currentThread().isInterrupted()) {
             try {
                 ATMData take = resultQueue.take();
-//                System.out.println("Parsed: ask:" + take.getAsk() + ", bid:" + take.getBid());
+                log.trace("Parsed: ask: {}, bid: ", take.getAsk(), take.getBid());
             } catch (InterruptedException e) {
-                e.printStackTrace();
+                log.error("Interrupted parsing data", e);
                 throw new RuntimeException(e);
             }
         }
