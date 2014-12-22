@@ -21,17 +21,22 @@ class Acknowledger implements Runnable {
 
     @Override
     public void run() {
-        prepareDataToSend();
+        ByteBuffer buf = prepareAck();
+        sendAck(buf);
+    }
+
+    private ByteBuffer prepareAck() {
+        buf.clear();
+        buf.put(new byte[1]);
+        buf.flip();
+        return buf;
+    }
+
+    private void sendAck(ByteBuffer buf) {
         while (buf.hasRemaining()) {
             send(buf);
         }
         log.trace("Ack sent");
-    }
-
-    private void prepareDataToSend() {
-        buf.clear();
-        buf.put(new byte[1]);
-        buf.flip();
     }
 
     private void send(ByteBuffer buf) {
@@ -43,8 +48,8 @@ class Acknowledger implements Runnable {
             key.selector().wakeup();
             try {
                 channel.close();
-            } catch (IOException e1) {
-                log.error("Error closing channel");
+            } catch (IOException ex) {
+                log.error("Error closing channel", ex);
             }
             throw new RuntimeException(e);
         }

@@ -62,9 +62,10 @@ class Reader implements Runnable {
         key.selector().wakeup();
         try {
             channel.close();
-        } catch (IOException e1) {
-            log.error("Error closing channel", e);
+        } catch (IOException ex) {
+            log.error("Error closing channel", ex);
         }
+        throw new RuntimeException(e);
     }
 
     private ATMData deserialize(byte[] array) {

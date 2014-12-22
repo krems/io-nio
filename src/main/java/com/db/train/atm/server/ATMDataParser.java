@@ -22,15 +22,19 @@ class ATMDataParser {
         log.info("ATMData parser started");
     }
 
-    private void parse(){
-        while(!Thread.currentThread().isInterrupted()) {
-            try {
-                ATMData take = resultQueue.take();
-                log.trace("Parsed: ask: {}, bid: ", take.getAsk(), take.getBid());
-            } catch (InterruptedException e) {
-                log.error("Interrupted parsing data", e);
-                throw new RuntimeException(e);
+    private void parse() {
+        try {
+            while (!Thread.currentThread().isInterrupted()) {
+                processAtmData();
             }
+        } catch (InterruptedException e) {
+            log.error("Interrupted parsing data", e);
+            throw new RuntimeException(e);
         }
+    }
+
+    private void processAtmData() throws InterruptedException {
+        ATMData take = resultQueue.take();
+        log.trace("Parsed: ask: {}, bid: ", take.getAsk(), take.getBid());
     }
 }

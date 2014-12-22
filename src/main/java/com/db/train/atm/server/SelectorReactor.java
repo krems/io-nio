@@ -31,6 +31,7 @@ class SelectorReactor implements Runnable {
                 channel.close();
             } catch (IOException e) {
                 log.error("Error closing channel", e);
+                throw new RuntimeException(e);
             }
         }
     }

@@ -29,15 +29,19 @@ class AcknowledgeHandler implements Runnable {
 
     private void catchAckMessage() {
         try {
-            if (channel.read(buf) <= 0) {
-                key.cancel();
-                key.selector().wakeup();
-                channel.close();
-            }
-            log.info("Delay: {} ms", (System.nanoTime() - startTimestamp) / 1e6);
-        } catch (Exception e) {
+            doCatchAckMessage();
+        } catch (IOException e) {
             handleException(e);
         }
+    }
+
+    private void doCatchAckMessage() throws IOException {
+        if (channel.read(buf) <= 0) {
+            key.cancel();
+            key.selector().wakeup();
+            channel.close();
+        }
+        log.info("Delay: {} ms", (System.nanoTime() - startTimestamp) / 1e6);
     }
 
     private void turnOnWriter() {
@@ -52,8 +56,9 @@ class AcknowledgeHandler implements Runnable {
         key.selector().wakeup();
         try {
             channel.close();
-        } catch (IOException e1) {
-            log.error("Error closing channel", e);
+        } catch (IOException ex) {
+            log.error("Error closing channel", ex);
         }
+        throw new RuntimeException(e);
     }
 }

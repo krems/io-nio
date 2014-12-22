@@ -17,8 +17,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 // 41_751.107629655206 msg/sec (multiple clients) | 12_593.748157790473 msg/sec (single client)
 public class Server {
-    private static final Logger log = LoggerFactory.getLogger(Server.class);
     static final int CLIENT_SELECTORS_NUMBER = Runtime.getRuntime().availableProcessors();
+    private static final Logger log = LoggerFactory.getLogger(Server.class);
     private final ExecutorService executor = Executors.newFixedThreadPool(CLIENT_SELECTORS_NUMBER + 2);
     private final BlockingQueue<ATMData> resultQueue = new LinkedBlockingQueue<>(200_000);
     private final Selector acceptorSelector;
@@ -54,12 +54,7 @@ public class Server {
 
     private void prepareServerSocket() {
         try {
-            ServerSocketChannel srvSocket = ServerSocketChannel.open();
-            srvSocket.socket().bind(new InetSocketAddress(port));
-            srvSocket.configureBlocking(false);
-            SelectionKey key = srvSocket.register(acceptorSelector, SelectionKey.OP_ACCEPT);
-            key.attach(new Acceptor(executor, key, resultQueue));
-            acceptorSelector.wakeup();
+            doPrepareServerSocket();
         } catch (Exception e) {
             log.error("Error preparing server socket channel", e);
             running = false;
@@ -67,20 +62,33 @@ public class Server {
         }
     }
 
+    private void doPrepareServerSocket() throws IOException {
+        ServerSocketChannel srvSocket = ServerSocketChannel.open();
+        srvSocket.socket().bind(new InetSocketAddress(port));
+        srvSocket.configureBlocking(false);
+        SelectionKey key = srvSocket.register(acceptorSelector, SelectionKey.OP_ACCEPT);
+        key.attach(new Acceptor(executor, key, resultQueue));
+        acceptorSelector.wakeup();
+    }
+
     private void runAcceptorReactorLoop() {
         running = true;
-        while (running && !Thread.currentThread().isInterrupted()) {
-            try {
-                acceptorSelector.select();
-                processSelected();
-            } catch (Exception e) {
-                log.error("Error in server reactor", e);
-                running = false;
-                executor.shutdownNow();
-                throw new RuntimeException(e);
-            }
+        try {
+            doRunReactorLoop();
+        } catch (Exception e) {
+            log.error("Error in server reactor", e);
+            running = false;
+            executor.shutdownNow();
+            throw new RuntimeException(e);
         }
         executor.shutdownNow();
+    }
+
+    private void doRunReactorLoop() throws IOException {
+        while (running && !Thread.currentThread().isInterrupted()) {
+            acceptorSelector.select();
+            processSelected();
+        }
     }
 
     private void processSelected() {
