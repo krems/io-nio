@@ -49,7 +49,6 @@ class Acceptor implements Runnable {
         } catch (Exception e) {
             log.error("Error accepting connection", e);
             key.selector().wakeup();
-            throw new RuntimeException(e);
         }
     }
 
@@ -67,7 +66,7 @@ class Acceptor implements Runnable {
             }
         }
     }
-
+    // todo: test performance and mb remove
     private int getNextReactorIndex() {
         return (int) (index++ % clientSelectorReactors.length);
     }

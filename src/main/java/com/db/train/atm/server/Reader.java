@@ -48,7 +48,7 @@ class Reader implements Runnable {
 
     private void processReceivedData() {
         ATMData data = deserialize(buf.array());
-        if (!resultQueue.offer(data)) {
+        if (data != null && !resultQueue.offer(data)) {
             System.err.println("Couldn't publish result");
         }
         new Acknowledger(key).run();
@@ -57,7 +57,7 @@ class Reader implements Runnable {
     }
 
     private void handleException(Exception e) {
-        log.error("Error occurred", e);
+        log.error("Error occurred while reading, closing channel", e);
         key.cancel();
         key.selector().wakeup();
         try {
@@ -65,7 +65,6 @@ class Reader implements Runnable {
         } catch (IOException ex) {
             log.error("Error closing channel", ex);
         }
-        throw new RuntimeException(e);
     }
 
     private ATMData deserialize(byte[] array) {
@@ -74,7 +73,7 @@ class Reader implements Runnable {
             return (ATMData) in.readObject();
         } catch (IOException | ClassNotFoundException e) {
             log.error("Error during deserialization", e);
-            throw new RuntimeException(e);
+            return null;
         }
     }
 

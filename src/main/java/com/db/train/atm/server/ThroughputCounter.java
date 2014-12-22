@@ -22,7 +22,6 @@ class ThroughputCounter {
             Thread.sleep(timeout);
         } catch (InterruptedException e) {
             log.error("ThroughputCounter interrupted", e);
-            throw new RuntimeException(e);
         }
     }
 }

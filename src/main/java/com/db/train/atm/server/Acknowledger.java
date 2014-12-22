@@ -43,7 +43,7 @@ class Acknowledger implements Runnable {
         try {
             channel.write(buf);
         } catch (IOException e) {
-            log.error("Error writing to channel", e);
+            log.error("Error acking", e);
             key.cancel();
             key.selector().wakeup();
             try {
@@ -51,7 +51,6 @@ class Acknowledger implements Runnable {
             } catch (IOException ex) {
                 log.error("Error closing channel", ex);
             }
-            throw new RuntimeException(e);
         }
     }
 }

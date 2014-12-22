@@ -31,7 +31,6 @@ class SelectorReactor implements Runnable {
                 channel.close();
             } catch (IOException e) {
                 log.error("Error closing channel", e);
-                throw new RuntimeException(e);
             }
         }
     }
@@ -69,11 +68,22 @@ class SelectorReactor implements Runnable {
         }
     }
 
-    private void registerNewChannels() throws ClosedChannelException {
+    private void registerNewChannels() {
         SocketChannel channel = registerQueue.poll();
         if (channel != null) {
-            SelectionKey key = channel.register(selector, SelectionKey.OP_READ);
-            key.attach(new Reader(key, resultQueue));
+            SelectionKey key = register(channel);
+            if (key != null) {
+                key.attach(new Reader(key, resultQueue));
+            }
+        }
+    }
+
+    private SelectionKey register(SocketChannel channel) {
+        try {
+            return channel.register(selector, SelectionKey.OP_READ);
+        } catch (ClosedChannelException e) {
+            log.warn("Trying to register closed channel", e);
+            return null;
         }
     }
 }

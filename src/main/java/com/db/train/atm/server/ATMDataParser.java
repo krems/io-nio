@@ -29,7 +29,7 @@ class ATMDataParser {
             }
         } catch (InterruptedException e) {
             log.error("Interrupted parsing data", e);
-            throw new RuntimeException(e);
+            log.info("ATMData parser stopped");
         }
     }
 
